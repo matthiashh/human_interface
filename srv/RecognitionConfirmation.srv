@@ -1,0 +1,11 @@
+#usually useful
+ Header header
+#the id could be necessary to match the result to a recognition
+ uint8 recognition_id
+#an array of possible name
+ string[] name_array
+ ---
+#return if we were successfull
+ bool sucessfull
+#return a name, if we were sucessfull
+ string label

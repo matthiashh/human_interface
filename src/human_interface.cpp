@@ -9,30 +9,43 @@
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "human_interface");
-  human_interface mainInterface;
+  human_interface_class mainInterface;
 
   mainInterface.run();
   return 0;
 }
 
-human_interface::human_interface()
+human_interface_class::human_interface_class()
 {
   //initialize ros-stuff
   pubRobotSounds_ = n_.advertise<sound_play::SoundRequest>("robotsound",100);
-  subSpeechRequests_ = n_.subscribe("/human_interface/speechRequest", 10, &human_interface::speechRequestCallback_, this);
+  subSpeechRequests_ = n_.subscribe("/human_interface/speechRequest", 10, &human_interface_class::speechRequestCallback_, this);
 
   //initialize speech-stuff
   speakersInUse_ = false;
 
 }
 
-void human_interface::speechRequestCallback_(const std_msgs::String received_request)
+void human_interface_class::recognitionConfirmation_(human_interface::RecognitionConfirmation::Request &req, human_interface::RecognitionConfirmation::Response &res)
 {
-    ROS_INFO("Received new speech request with content: %s",received_request.data.c_str());
-    say(received_request.data);
+  ROS_INFO("Recognition confirmation starting");
 }
 
-int human_interface::run()
+void human_interface_class::yesNoQuestion(human_interface::YesNoQuestion::Request &req, human_interface::YesNoQuestion::Response &res)
+{
+  ROS_INFO("Yes-No-Question asked");
+
+  say_(req.question);
+
+}
+
+void human_interface_class::speechRequestCallback_(const std_msgs::String received_request)
+{
+    ROS_INFO("Received new speech request with content: %s",received_request.data.c_str());
+    say_(received_request.data);
+}
+
+int human_interface_class::run()
 {
   ros::Rate r(10);
   while (ros::ok())
@@ -42,7 +55,7 @@ int human_interface::run()
     }
 }
 
-int human_interface::say(std::string text_to_say)
+int human_interface_class::say_(std::string text_to_say)
 {
   sound_play::SoundRequest request;
   request.sound = -3;
