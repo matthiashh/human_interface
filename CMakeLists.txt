@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -26,6 +27,7 @@ find_package(catkin REQUIRED COMPONENTS
 ################################################
 ## Declare ROS messages, services and actions ##
 ################################################
+
 
 ## To declare and build messages, services or actions from within this
 ## package, follow these steps:
@@ -113,7 +115,7 @@ include_directories(
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
-# add_dependencies(human_interface_node human_interface_generate_messages_cpp)
+ add_dependencies(human_interface $(catkin_EXPORTED_TARGETS))
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(human_interface

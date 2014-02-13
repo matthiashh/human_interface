@@ -4,4 +4,9 @@ Header header
 string question
 ---
 #the answer
+# 0 = worked
+# 1 = no answer
+# 2 = wrong answers
+# 3 = speaker blocked
+int8 status
 bool answer
