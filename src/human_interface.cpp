@@ -11,7 +11,7 @@ int main(int argc, char** argv)
 {
   ros::init(argc, argv, "human_interface");
   human_interface_class mainInterface;
-
+  ROS_INFO("Finished initialization, now running in the loop");
   mainInterface.run();
   return 0;
 }
@@ -20,21 +20,22 @@ human_interface_class::human_interface_class()
 {
   //initialize ros-stuff
   pubRobotSounds_ = n_.advertise<sound_play::SoundRequest>("robotsound",100);
-  subSpeechRequests_ = n_.subscribe("/human_interface/speechRequest", 10, &human_interface_class::speechRequestCallback_, this);
+  subSpeechRequests_ = n_.subscribe("/human_interface/speech_request", 10, &human_interface_class::speechRequestCallback_, this);
   yesNoServer_ = n_.advertiseService("human_interface/yes_no_question",&human_interface_class::yesNoQuestionService,this);
   confirmationServer_ = n_.advertiseService("/human_interface/speech_confirmation", &human_interface_class::recognitionConfirmation_, this);
-  subSpeechRecog_ = n_.subscribe("/recognizer/output",10,&human_interface_class::speechInputCallback_,this);
-  pubConfirmations_ = n_.advertise<person_detector::SpeechConfirmation>("/human_interface/confirmations",10);
+  subSpeechRecog_ = n_.subscribe("/recognizer/output",10,&human_interface_class::speechRecognitionCallback_,this);
+  pubConfirmations_ = n_.advertise<person_detector::SpeechConfirmation>("/person_detector/confirmations",10);
   //initialize speech-stuff
-  speakersInUse_ = false;
+  speakers_in_use_ = false;
   speech_confirmation_id = 0;
 }
 
 bool human_interface_class::recognitionConfirmation_(human_interface::RecognitionConfirmation::Request &req, human_interface::RecognitionConfirmation::Response &res)
 {
-  ROS_INFO("Recognition confirmation starting");
+  ROS_INFO("Recognition confirmation received, now waiting for speaker");
   if (req.name_array.size() == 0 || !getSpeakers(ros::Duration(15)))
     {
+      ROS_WARN("No access to speaker. Aborting this confirmation");
       res.label = "";
       res.sucessfull = false;
       return true;
@@ -66,14 +67,15 @@ bool human_interface_class::recognitionConfirmation_(human_interface::Recognitio
         if (answer == true)
         {
           ROS_INFO("The question was answered, we can finish this confirmation.");
-          say_("Yeah! I'm so happy, that I found you");
           res.sucessfull = true;
+          res.label = req.name_array[it];
           query_to_detector.header.seq = speech_confirmation_id;
           speech_confirmation_id++;
           query_to_detector.running = false;
-          query_to_detector.suceeded = false;
+          query_to_detector.suceeded = true;
           query_to_detector.label = req.name_array[it];
           pubConfirmations_.publish(query_to_detector);
+          speakers_in_use_ = false;
           return true;
         }
         else
@@ -82,7 +84,7 @@ bool human_interface_class::recognitionConfirmation_(human_interface::Recognitio
             break;
         }
       }
-      case 3: //speakers blocked
+      case 3: //speakers blocked - shouldn't happen, as we blocked the speakers before
       {
         ROS_INFO("The speakers were blocked - we're aborting this confirmation");
         res.sucessfull = false;
@@ -91,36 +93,48 @@ bool human_interface_class::recognitionConfirmation_(human_interface::Recognitio
         query_to_detector.running = false;
         query_to_detector.suceeded = false;
         pubConfirmations_.publish(query_to_detector);
-        speakersInUse_ = false;
+        speakers_in_use_ = false;
         return true;
       }
       case 2: //wrong answer
       {
-        ROS_INFO("The question wasn't properly answered - we're aborting this confirmation");
-        res.sucessfull = false;
-        query_to_detector.header.seq = speech_confirmation_id;
-        speech_confirmation_id++;
-        query_to_detector.running = false;
-        query_to_detector.suceeded = false;
-        pubConfirmations_.publish(query_to_detector);
-        speakersInUse_ = false;
-        return true;
+        ROS_INFO("The question wasn't properly answered - we go on with the next name");
+//        res.sucessfull = false;
+//        query_to_detector.header.seq = speech_confirmation_id;
+//        speech_confirmation_id++;
+//        query_to_detector.running = false;
+//        query_to_detector.suceeded = false;
+//        pubConfirmations_.publish(query_to_detector);
+//        speakers_in_use_ = false;
+//        return true;
+        break;
       }
       case 1: // no answer at all
       {
-        ROS_INFO("The question wasn't properly answered - we're aborting this confirmation");
-        res.sucessfull = false;
-        query_to_detector.header.seq = speech_confirmation_id;
-        speech_confirmation_id++;
-        query_to_detector.running = false;
-        query_to_detector.suceeded = false;
-        pubConfirmations_.publish(query_to_detector);
-        speakersInUse_ = false;
-        return true;
+        ROS_INFO("The question wasn't properly answered - going on with the next name");
+//        res.sucessfull = false;
+//        query_to_detector.header.seq = speech_confirmation_id;
+//        speech_confirmation_id++;
+//        query_to_detector.running = false;
+//        query_to_detector.suceeded = false;
+//        pubConfirmations_.publish(query_to_detector);
+//        speakers_in_use_ = false;
+//        return true;
+        break;
       }
     }
   }
-
+  ROS_INFO("Gone through all the names and didn't receive a positive answer.");
+  res.sucessfull = false;
+  query_to_detector.header.stamp = ros::Time::now();
+  query_to_detector.header.seq = speech_confirmation_id;
+  speech_confirmation_id++;
+  query_to_detector.running = false;
+  query_to_detector.suceeded = false;
+  query_to_detector.tried = true;
+  pubConfirmations_.publish(query_to_detector);
+  speakers_in_use_ = false;
+  return true;
 }
 
 bool human_interface_class::yesNoQuestionService(human_interface::YesNoQuestion::Request &req, human_interface::YesNoQuestion::Response &res)
@@ -133,7 +147,7 @@ bool human_interface_class::yesNoQuestionService(human_interface::YesNoQuestion:
   yesNoQuestion(question,answer,status);
   res.answer = answer;
   res.status = status;
-  speakersInUse_ = false;
+  speakers_in_use_ = false;
   return true;
 }
 
@@ -165,7 +179,7 @@ void human_interface_class::yesNoQuestion(std::string question, bool &answer, in
     if (!speech_q.empty())
     {
       act = speech_q.front();
-      ROS_INFO("New sentence is %c",act.sentence.c_str());
+      //ROS_INFO("New sentence is %s",act.sentence.c_str());
       speech_q.pop();
       if (act.time < done)
       {
@@ -191,12 +205,12 @@ void human_interface_class::yesNoQuestion(std::string question, bool &answer, in
             }
           else
             {
-              ROS_INFO("Throwing away the answer %c",act.sentence.c_str());
+              ROS_INFO("Throwing away the answer %s",act.sentence.c_str());
             }
       }
     }
     //sleep a second
-    if ((ros::Time::now() - done) > ros::Duration(15))
+    if ((ros::Time::now() - done) > ros::Duration(20))
     {
       //abort, because we waited too long
       ROS_INFO("Aborting because we didn't receive an right answer");
@@ -212,7 +226,7 @@ void human_interface_class::yesNoQuestion(std::string question, bool &answer, in
   }
 }
 
-void human_interface_class::speechInputCallback_(const std_msgs::String speech)
+void human_interface_class::speechRecognitionCallback_(const std_msgs::String speech)
 {
   human_interface::speechRec new_one;
   new_one.time = ros::Time::now();
@@ -224,19 +238,23 @@ void human_interface_class::speechInputCallback_(const std_msgs::String speech)
    speech_q.push(new_one);
 }
 
-void human_interface_class::speechRequestCallback_(const std_msgs::String received_request)
+void human_interface_class::speechRequestCallback_(human_interface::SpeechRequest req)
 {
-    ROS_INFO("Received new speech request with content: %s",received_request.data.c_str());
-    if (!getSpeakers(ros::Duration(15))) return;
-    say_(received_request.data);
-    speakersInUse_ = false;
+    ROS_INFO("Received new speech request");
+    if (!getSpeakers(ros::Duration(15)))
+      {
+        ROS_WARN("Skipping speech request, because we don't have access to the speakers. Data: %s",req.text_to_say.c_str());
+        return;
+      }
+    say_(req.text_to_say);
+    speakers_in_use_ = false;
 }
 
 bool human_interface_class::getSpeakers(ros::Duration max)
 {
   ros::Time start = ros::Time::now();
   ros::Duration sleep_time = ros::Duration(2,0);
-  while (speakersInUse_)
+  while (speakers_in_use_)
   {
     sleep_time.sleep();
     if ((ros::Time::now()-start) > max)
@@ -245,7 +263,7 @@ bool human_interface_class::getSpeakers(ros::Duration max)
       return false;
     }
   }
-  speakersInUse_ = true;
+  speakers_in_use_ = true;
   return true;
 }
 
@@ -270,7 +288,7 @@ int human_interface_class::say_(std::string text_to_say)
   //experiments show 0.07 sec / letter
   dur += ros::Duration(text_to_say.size()*0.07);
   pubRobotSounds_.publish(request);
-  ROS_DEBUG("Published text-to-speech %s",text_to_say.c_str());
+  ROS_INFO("Published text-to-speech: %s",text_to_say.c_str());
   dur.sleep();
   return 0;
 }

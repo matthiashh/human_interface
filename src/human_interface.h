@@ -31,13 +31,13 @@ private:
   ros::Publisher pubConfirmations_;
 
   //speech
-  bool speakersInUse_;
+  bool speakers_in_use_;
   int say_(std::string text_to_say);
   bool recognitionConfirmation_(human_interface::RecognitionConfirmation::Request &req, human_interface::RecognitionConfirmation::Response &res);
   bool yesNoQuestionService(human_interface::YesNoQuestion::Request &req, human_interface::YesNoQuestion::Response &res);
   void yesNoQuestion(std::string question, bool &answer, int &status);
-  void speechInputCallback_ (const std_msgs::String speech);
-  void speechRequestCallback_(const std_msgs::String received_request);
+  void speechRecognitionCallback_ (const std_msgs::String speech);
+  void speechRequestCallback_(human_interface::SpeechRequest req);
   std::queue <human_interface::speechRec> speech_q;
   bool getSpeakers(ros::Duration max);
   int speech_confirmation_id;
