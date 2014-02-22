@@ -15,6 +15,13 @@ namespace human_interface {
     ros::Time time;
     std::string sentence;
   };
+
+  enum yes_no_result {
+    ANSWERED = 0,
+    UNANSWERED = 1,
+    WRONG_ANSWER = 2,
+    BLOCKED_SPEAKER = 3
+  };
 }
 
 class human_interface_class
@@ -28,7 +35,6 @@ private:
   ros::Subscriber subSpeechRecog_;
   ros::ServiceServer confirmationServer_;
   ros::ServiceClient yesNoClient_;
-  ros::Publisher pubConfirmations_;
 
   //speech
   bool speakers_in_use_;
@@ -40,7 +46,6 @@ private:
   void speechRequestCallback_(human_interface::SpeechRequest req);
   std::queue <human_interface::speechRec> speech_q;
   bool getSpeakers(ros::Duration max);
-  int speech_confirmation_id;
 public:
   human_interface_class();
   int run();

@@ -7,5 +7,6 @@
  ---
 #return if we were successfull
  bool sucessfull
+ bool answered
 #return a name, if we were sucessfull
  string label

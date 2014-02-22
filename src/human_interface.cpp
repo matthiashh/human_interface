@@ -3,7 +3,7 @@
 #include <sound_play/SoundRequest.h>
 //#include <human_interface/speechRequest.h> //doesn't work -.-
 #include <std_msgs/String.h>
-#include <person_detector/SpeechConfirmation.h>
+
 
 
 
@@ -24,10 +24,8 @@ human_interface_class::human_interface_class()
   yesNoServer_ = n_.advertiseService("human_interface/yes_no_question",&human_interface_class::yesNoQuestionService,this);
   confirmationServer_ = n_.advertiseService("/human_interface/speech_confirmation", &human_interface_class::recognitionConfirmation_, this);
   subSpeechRecog_ = n_.subscribe("/recognizer/output",10,&human_interface_class::speechRecognitionCallback_,this);
-  pubConfirmations_ = n_.advertise<person_detector::SpeechConfirmation>("/person_detector/confirmations",10);
   //initialize speech-stuff
   speakers_in_use_ = false;
-  speech_confirmation_id = 0;
 }
 
 bool human_interface_class::recognitionConfirmation_(human_interface::RecognitionConfirmation::Request &req, human_interface::RecognitionConfirmation::Response &res)
@@ -40,16 +38,9 @@ bool human_interface_class::recognitionConfirmation_(human_interface::Recognitio
       res.sucessfull = false;
       return true;
     }
-  person_detector::SpeechConfirmation query_to_detector;
-  query_to_detector.header.frame_id = "/map";
-  query_to_detector.header.stamp = ros::Time::now();
-  query_to_detector.header.seq = speech_confirmation_id;
-  speech_confirmation_id++;
-  query_to_detector.id = req.recognition_id;
-  query_to_detector.label = "";
-  query_to_detector.running = true;
-  pubConfirmations_.publish(query_to_detector);
+
   say_("Hey! My name is Max. I am searching for person.");
+  res.answered = false;
   std::string question;
   bool answer;
   int status;
@@ -59,57 +50,27 @@ bool human_interface_class::recognitionConfirmation_(human_interface::Recognitio
     question = "Are you " + req.name_array[it] + "?";
     yesNoQuestion(question,answer,status);
     //process the result
-    query_to_detector.header.stamp = ros::Time::now();
     switch (status)
     {
-      case 0: //answered :-)
+      case human_interface::ANSWERED: //answered :-)
       {
         if (answer == true)
         {
           ROS_INFO("The question was answered, we can finish this confirmation.");
           res.sucessfull = true;
+          res.answered = true;
           res.label = req.name_array[it];
-          query_to_detector.header.seq = speech_confirmation_id;
-          speech_confirmation_id++;
-          query_to_detector.running = false;
-          query_to_detector.suceeded = true;
-          query_to_detector.label = req.name_array[it];
-          pubConfirmations_.publish(query_to_detector);
           speakers_in_use_ = false;
           return true;
         }
         else
         {
             ROS_INFO("This wasn't the right name, we go to the next");
+            res.answered = true;
             break;
         }
       }
-      case 3: //speakers blocked - shouldn't happen, as we blocked the speakers before
-      {
-        ROS_INFO("The speakers were blocked - we're aborting this confirmation");
-        res.sucessfull = false;
-        query_to_detector.header.seq = speech_confirmation_id;
-        speech_confirmation_id++;
-        query_to_detector.running = false;
-        query_to_detector.suceeded = false;
-        pubConfirmations_.publish(query_to_detector);
-        speakers_in_use_ = false;
-        return true;
-      }
-      case 2: //wrong answer
-      {
-        ROS_INFO("The question wasn't properly answered - we go on with the next name");
-//        res.sucessfull = false;
-//        query_to_detector.header.seq = speech_confirmation_id;
-//        speech_confirmation_id++;
-//        query_to_detector.running = false;
-//        query_to_detector.suceeded = false;
-//        pubConfirmations_.publish(query_to_detector);
-//        speakers_in_use_ = false;
-//        return true;
-        break;
-      }
-      case 1: // no answer at all
+      case human_interface::UNANSWERED: // no answer at all
       {
         ROS_INFO("The question wasn't properly answered - going on with the next name");
 //        res.sucessfull = false;
@@ -122,17 +83,30 @@ bool human_interface_class::recognitionConfirmation_(human_interface::Recognitio
 //        return true;
         break;
       }
+      case human_interface::WRONG_ANSWER: //wrong answer
+      {
+        ROS_INFO("The question wasn't properly answered - we go on with the next name");
+//        res.sucessfull = false;
+//        query_to_detector.header.seq = speech_confirmation_id;
+//        speech_confirmation_id++;
+//        query_to_detector.running = false;
+//        query_to_detector.suceeded = false;
+//        pubConfirmations_.publish(query_to_detector);
+//        speakers_in_use_ = false;
+//        return true;
+        break;
+      }
+      case human_interface::BLOCKED_SPEAKER: //speakers blocked - shouldn't happen, as we blocked the speakers before
+      {
+        ROS_ERROR("The speakers were blocked - we're aborting this confirmation");
+        res.sucessfull = false;
+        speakers_in_use_ = false;
+        return true;
+      }
     }
   }
   ROS_INFO("Gone through all the names and didn't receive a positive answer.");
   res.sucessfull = false;
-  query_to_detector.header.stamp = ros::Time::now();
-  query_to_detector.header.seq = speech_confirmation_id;
-  speech_confirmation_id++;
-  query_to_detector.running = false;
-  query_to_detector.suceeded = false;
-  query_to_detector.tried = true;
-  pubConfirmations_.publish(query_to_detector);
   speakers_in_use_ = false;
   return true;
 }
