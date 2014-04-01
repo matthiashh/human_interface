@@ -22,13 +22,13 @@ human_interface_class::human_interface_class()
   pubRobotSounds_ = n_.advertise<sound_play::SoundRequest>("robotsound",100);
   subSpeechRequests_ = n_.subscribe("/human_interface/speech_request", 10, &human_interface_class::speechRequestCallback_, this);
   yesNoServer_ = n_.advertiseService("human_interface/yes_no_question",&human_interface_class::yesNoQuestionService,this);
-  confirmationServer_ = n_.advertiseService("/human_interface/speech_confirmation", &human_interface_class::recognitionConfirmation_, this);
+  confirmationServer_ = n_.advertiseService("/human_interface/speech_confirmation", &human_interface_class::recognitionConfirmation, this);
   subSpeechRecog_ = n_.subscribe("/recognizer/output",10,&human_interface_class::speechRecognitionCallback_,this);
   //initialize speech-stuff
   speakers_in_use_ = false;
 }
 
-bool human_interface_class::recognitionConfirmation_(human_interface::RecognitionConfirmation::Request &req, human_interface::RecognitionConfirmation::Response &res)
+bool human_interface_class::recognitionConfirmation(human_interface::RecognitionConfirmation::Request &req, human_interface::RecognitionConfirmation::Response &res)
 {
   ROS_INFO("Recognition confirmation received, now waiting for speaker");
   if (req.name_array.size() == 0 || !getSpeakers(ros::Duration(15)))
@@ -251,7 +251,7 @@ int human_interface_class::run()
     }
 }
 
-int human_interface_class::say_(std::string text_to_say)
+void human_interface_class::say_(std::string text_to_say)
 {
   sound_play::SoundRequest request;
   request.sound = -3;
@@ -264,5 +264,4 @@ int human_interface_class::say_(std::string text_to_say)
   pubRobotSounds_.publish(request);
   ROS_INFO("Published text-to-speech: %s",text_to_say.c_str());
   dur.sleep();
-  return 0;
 }
